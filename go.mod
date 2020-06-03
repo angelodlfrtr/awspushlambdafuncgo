@@ -1,4 +1,4 @@
-module github.com/angelodlfrtr/pushawslambdafunc
+module github.com/angelodlfrtr/awspushlambdafuncgo
 
 go 1.12
 
