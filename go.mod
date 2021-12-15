@@ -1,15 +1,10 @@
 module github.com/angelodlfrtr/awspushlambdafuncgo
 
-go 1.12
+go 1.17
 
 require (
-	github.com/aws/aws-lambda-go v1.10.0 // indirect
-	github.com/aws/aws-sdk-go v1.19.11
-	github.com/dsnet/compress v0.0.1 // indirect
-	github.com/golang/snappy v0.0.1 // indirect
-	github.com/logrusorgru/aurora v0.0.0-20181002194514-a7b3b318ed4e
-	github.com/mholt/archiver v3.1.1+incompatible
-	github.com/nwaples/rardecode v1.0.0 // indirect
-	github.com/pierrec/lz4 v2.0.5+incompatible // indirect
-	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
+	github.com/aws/aws-sdk-go v1.42.23
+	github.com/logrusorgru/aurora v2.0.3+incompatible
 )
+
+require github.com/jmespath/go-jmespath v0.4.0 // indirect

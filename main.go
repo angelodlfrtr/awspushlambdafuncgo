@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/aws/aws-sdk-go/service/s3"
+
 	. "github.com/logrusorgru/aurora"
 )
 
@@ -22,6 +23,7 @@ type RcConfig struct {
 	Name   string `json:"name"`
 	Bucket string `json:"bucket"`
 	Region string `json:"region"`
+	Arm    bool   `json:"arm"`
 }
 
 func main() {
@@ -32,13 +34,13 @@ func main() {
 	functionName := flag.String("name", "", "Function name")
 	s3Bucket := flag.String("bucket", "", "S3 bucket name")
 	region := flag.String("region", "", "AWS Region")
+	arm := flag.Bool("arm", false, "Build for aws Graviton2 arm arch")
 
 	// Parse flags
 	flag.Parse()
 
 	// Get absolute path for lamlbda func
 	realFunctionPath, err := filepath.Abs(*functionPath)
-
 	if err != nil {
 		fmt.Println(Red(err.Error()))
 		os.Exit(1)
@@ -66,7 +68,7 @@ func main() {
 	rcBytes, err = ioutil.ReadFile(rcFilePath)
 
 	if err != nil {
-		//fmt.Println(Red(err.Error()))
+		// fmt.Println(Red(err.Error()))
 		Magenta(">> No rc file found")
 	} else {
 		// Load json
@@ -98,6 +100,11 @@ func main() {
 				awsRegion = rcConfig.Region
 			}
 		}
+
+		// Set Arm build
+		if rcConfig.Arm {
+			arm = &rcConfig.Arm
+		}
 	}
 
 	// VALIDATE ======================================================================================
@@ -116,8 +123,14 @@ func main() {
 		flag.PrintDefaults()
 	}
 
+	// Log params
+	usingArm := "No"
+	if *arm {
+		usingArm = "Yes"
+	}
 	fmt.Println(">> Run pushlambdafungo for function", Green(realFunctionPath))
 	fmt.Println(">> Function name :", Green(*functionName))
+	fmt.Println(">> Arm build (AWS Graviton2) :", Green(usingArm))
 	fmt.Println(">> AWS Region :", Green(awsRegion))
 	fmt.Println(">> S3 Bucket :", Green(*s3Bucket))
 
@@ -129,6 +142,7 @@ func main() {
 	compileCmd := exec.Command(
 		"go",
 		"build",
+		"-trimpath",
 		"-o",
 		fmt.Sprintf("%s/main", realFunctionPath),
 		fmt.Sprintf("%s/main.go", realFunctionPath),
@@ -138,8 +152,15 @@ func main() {
 	compileCmd.Env = os.Environ()
 	compileCmd.Env = append(compileCmd.Env, "GOOS=linux")
 
-	var compileOut []byte
+	// If arm
+	if *arm {
+		compileCmd.Env = append(compileCmd.Env, "GOARCH=arm64")
+	} else {
+		// Else x86_64
+		compileCmd.Env = append(compileCmd.Env, "GOARCH=amd64")
+	}
 
+	var compileOut []byte
 	compileOut, err = compileCmd.CombinedOutput()
 
 	if err != nil {
@@ -160,10 +181,15 @@ func main() {
 	// Create zip writer
 	zipWriter := zip.NewWriter(zipBuf)
 
+	zipFileName := "main"
+	if *arm {
+		zipFileName = "bootstrap"
+	}
+
 	zipFile, _ := zipWriter.CreateHeader(&zip.FileHeader{
 		CreatorVersion: 3 << 8,
 		ExternalAttrs:  0777 << 16,
-		Name:           "main",
+		Name:           zipFileName,
 		Method:         zip.Deflate,
 	})
 
@@ -174,7 +200,6 @@ func main() {
 
 	// Read compiled binary as array of byte
 	binaryContent, err := ioutil.ReadFile(fmt.Sprintf("%s/main", realFunctionPath))
-
 	if err != nil {
 		fmt.Println(Red(err.Error()))
 		os.Exit(1)
@@ -201,7 +226,7 @@ func main() {
 	s3Client := s3.New(sess)
 
 	// Create file on disk TEST
-	//ioutil.WriteFile(fmt.Sprintf("%s/main.zip", realFunctionPath), zipBuf.Bytes(), 0644)
+	// ioutil.WriteFile(fmt.Sprintf("%s/main.zip", realFunctionPath), zipBuf.Bytes(), 0644)
 
 	// Create io reader from zip buffer
 	zipReader := bytes.NewReader(zipBuf.Bytes())
@@ -234,6 +259,12 @@ func main() {
 		DryRun:       aws.Bool(false),
 		S3Bucket:     aws.String(*s3Bucket),
 		S3Key:        aws.String(fmt.Sprintf("%s.zip", *functionName)),
+	}
+
+	if *arm {
+		updateFuncCodeInput.Architectures = aws.StringSlice([]string{"arm64"})
+	} else {
+		updateFuncCodeInput.Architectures = aws.StringSlice([]string{"x86_64"})
 	}
 
 	_, err = lambdaClient.UpdateFunctionCode(updateFuncCodeInput)
