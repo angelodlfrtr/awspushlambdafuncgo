@@ -152,6 +152,9 @@ func main() {
 	compileCmd.Env = os.Environ()
 	compileCmd.Env = append(compileCmd.Env, "GOOS=linux")
 
+	// Disable CGO (seems to be enabled by default on go1.19)
+	compileCmd.Env = append(compileCmd.Env, "CGO_ENABLED=0")
+
 	// If arm
 	if *arm {
 		compileCmd.Env = append(compileCmd.Env, "GOARCH=arm64")
@@ -188,7 +191,7 @@ func main() {
 
 	zipFile, _ := zipWriter.CreateHeader(&zip.FileHeader{
 		CreatorVersion: 3 << 8,
-		ExternalAttrs:  0777 << 16,
+		ExternalAttrs:  0o777 << 16,
 		Name:           zipFileName,
 		Method:         zip.Deflate,
 	})
