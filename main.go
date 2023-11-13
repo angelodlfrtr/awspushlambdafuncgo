@@ -56,8 +56,6 @@ func main() {
 	var awsRegion string
 	if len(*region) > 0 {
 		awsRegion = *region
-	} else {
-		awsRegion = os.Getenv("AWS_DEFAULT_REGION")
 	}
 
 	// PUSHRC ========================================================================================
@@ -105,6 +103,10 @@ func main() {
 		if rcConfig.Arm {
 			arm = &rcConfig.Arm
 		}
+	}
+
+	if len(awsRegion) < 1 {
+		awsRegion = os.Getenv("AWS_DEFAULT_REGION")
 	}
 
 	// VALIDATE ======================================================================================
